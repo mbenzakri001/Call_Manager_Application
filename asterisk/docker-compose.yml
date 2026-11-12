@@ -5,9 +5,21 @@ services:
     ports:
       - "5060:5060/udp"
       - "5060:5060/tcp"
+      - "8088:8088/tcp"
       - "10000-10100:10000-10100/udp"
     volumes:
       - ./config/pjsip.conf:/etc/asterisk/pjsip.conf
       - ./config/extensions.conf:/etc/asterisk/extensions.conf
       - ./config/rtp.conf:/etc/asterisk/rtp.conf
+      - ./config/http.conf:/etc/asterisk/http.conf
+    networks:
+      voip:
+        # IP fixe : référencée dans rtp.conf ([ice_host_candidates])
+        ipv4_address: 172.30.0.10
     restart: unless-stopped
+
+networks:
+  voip:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
