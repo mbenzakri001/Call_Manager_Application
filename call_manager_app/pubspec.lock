@@ -211,14 +211,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.1.0"
-  lists:
-    dependency: transitive
-    description:
-      name: lists
-      sha256: "4ca5c19ae4350de036a7e996cdd1ee39c93ac0a2b840f4915459b7d0a7d4ab27"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.1"
   logger:
     dependency: transitive
     description:
@@ -379,13 +371,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.3.2"
+  simple_sparse_list:
+    dependency: transitive
+    description:
+      name: simple_sparse_list
+      sha256: aa648fd240fa39b49dcd11c19c266990006006de6699a412de485695910fbc1f
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.4"
   sip_ua:
     dependency: "direct main"
     description:
-      name: sip_ua
-      sha256: "09b107901365d25779a9dbdb7d8396cdd76d1c48dc367155a3dc9021126fbab7"
-      url: "https://pub.dev"
-    source: hosted
+      path: "."
+      ref: "7128d90"
+      resolved-ref: "7128d9020f475cd0224315a6c9d21ee8d12c8e77"
+      url: "https://github.com/flutter-webrtc/dart-sip-ua.git"
+    source: git
     version: "1.1.0"
   sky_engine:
     dependency: transitive
@@ -452,10 +453,10 @@ packages:
     dependency: transitive
     description:
       name: text
-      sha256: d321420b6204bb9f1bf5270b18f500ab8e114bb92f41ff15278e50f374326b68
+      sha256: d6f41f1ad54582aadc34a3e6a39464f02e08bddf8d21770f6f63a4cc15f5b9eb
       url: "https://pub.dev"
     source: hosted
-    version: "0.2.0"
+    version: "1.0.0"
   uuid:
     dependency: transitive
     description:

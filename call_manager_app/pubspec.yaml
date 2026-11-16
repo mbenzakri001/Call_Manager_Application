@@ -88,3 +88,12 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# sip_ua 1.1.0 (pub.dev) ne compile pas pour le Web : bug corrigé sur GitHub
+# (commit "Fix: WebSocket and Hangup for web platform #568") mais pas encore
+# publié. On utilise ce commit précis jusqu'à la prochaine version.
+dependency_overrides:
+  sip_ua:
+    git:
+      url: https://github.com/flutter-webrtc/dart-sip-ua.git
+      ref: 7128d90

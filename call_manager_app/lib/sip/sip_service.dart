@@ -171,6 +171,9 @@ class SipService extends ChangeNotifier implements SipUaHelperListener {
   void onNewReinvite(ReInvite event) {}
 
   @override
+  void onNewInfo(SipInfo info) {}
+
+  @override
   void dispose() {
     stop();
     _closeMicrophone();
