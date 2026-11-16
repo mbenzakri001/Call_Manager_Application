@@ -3,6 +3,9 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:sip_ua/sip_ua.dart';
 
 import '../config/sip_config.dart';
+import '../core/call_decision.dart';
+import '../core/call_decision_engine.dart';
+import '../core/demo_repositories.dart';
 
 /// Seul point de contact avec sip_ua : connexion à Asterisk, enregistrement,
 /// appels entrants/sortants. L'interface ne fait qu'écouter ce service.
@@ -19,6 +22,26 @@ class SipService extends ChangeNotifier implements SipUaHelperListener {
   bool speakerOn = false;
 
   MediaStream? _localStream;
+
+  // --- Moteur de décision (call manager) ------------------------------------
+
+  /// Contacts et calendrier de démo (remplacés plus tard par les vrais).
+  final DemoContacts contacts = DemoContacts();
+  final DemoCalendar calendar = DemoCalendar();
+
+  late final CallDecisionEngine engine =
+      CallDecisionEngine(contacts: contacts, calendar: calendar);
+
+  /// Canal utilisé pour prévenir l'appelant quand on refuse.
+  ResponseMode responseMode = ResponseMode.sms;
+
+  /// Texte de la dernière décision prise (affiché pour la démo).
+  String? lastDecision;
+
+  /// Permet à l'interface de demander un rafraîchissement.
+  void refresh() => notifyListeners();
+
+  // ---------------------------------------------------------------------------
 
   bool get isRegistered =>
       registrationState == RegistrationStateEnum.REGISTERED;
@@ -100,6 +123,37 @@ class SipService extends ChangeNotifier implements SipUaHelperListener {
     notifyListeners();
   }
 
+  /// Interroge le moteur de décision pour un appel entrant, puis applique
+  /// la décision : laisser sonner, ou refuser automatiquement.
+  Future<void> _applyDecision(Call call) async {
+    final number = call.remote_identity ?? '';
+    final decision = await engine.decide(number, responseMode);
+
+    // L'appelant a pu raccrocher pendant l'analyse.
+    if (call.state == CallStateEnum.ENDED ||
+        call.state == CallStateEnum.FAILED) {
+      return;
+    }
+
+    switch (decision) {
+      case LetRing(:final contactName):
+        lastDecision =
+            '$contactName ($number) : contact connu et disponible -> sonnerie';
+
+      case RejectUnknown():
+        lastDecision = '$number : numéro inconnu -> refusé automatiquement (603)';
+        call.hangup(<String, dynamic>{'status_code': 603}); // Decline
+
+      case RejectBusy(:final contactName, :final appointment):
+        lastDecision = '$contactName ($number) : en rendez-vous jusqu\'à '
+            '${formatHour(appointment.end)} -> refusé automatiquement (486)';
+        call.hangup(<String, dynamic>{'status_code': 486}); // Busy Here
+    }
+
+    debugPrint('DÉCISION : $lastDecision');
+    notifyListeners();
+  }
+
   // --- SipUaHelperListener ---------------------------------------------------
 
   @override
@@ -135,8 +189,10 @@ class SipService extends ChangeNotifier implements SipUaHelperListener {
       case CallStateEnum.CALL_INITIATION:
         currentCall = call;
         callState = state.state;
-        // Point d'entrée du futur moteur de décision (contacts, calendrier,
-        // liste noire…) pour les appels entrants.
+        // Moteur de décision : uniquement pour les appels entrants.
+        if (call.direction == Direction.incoming) {
+          _applyDecision(call);
+        }
       case CallStateEnum.ENDED:
       case CallStateEnum.FAILED:
         if (state.cause?.status_code != null &&
