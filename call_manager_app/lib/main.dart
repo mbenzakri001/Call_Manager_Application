@@ -3,6 +3,7 @@ import 'package:sip_ua/sip_ua.dart';
 
 import 'config/sip_config.dart';
 import 'sip/sip_service.dart';
+import 'ui/call_manager_card.dart';
 
 void main() {
   runApp(const CallManagerApp());
@@ -61,6 +62,8 @@ class _HomePageState extends State<HomePage> {
           padding: const EdgeInsets.all(16),
           children: [
             _StatusCard(sip: _sip),
+            const SizedBox(height: 16),
+            CallManagerCard(sip: _sip),
             const SizedBox(height: 16),
             if (_sip.currentCall == null)
               _DialPanel(sip: _sip, target: _target)
