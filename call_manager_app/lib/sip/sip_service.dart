@@ -5,7 +5,10 @@ import 'package:sip_ua/sip_ua.dart';
 import '../config/sip_config.dart';
 import '../core/call_decision.dart';
 import '../core/call_decision_engine.dart';
+import '../core/call_rules.dart';
+import '../core/decision_log.dart';
 import '../core/demo_repositories.dart';
+import '../core/phone_utils.dart';
 
 /// Seul point de contact avec sip_ua : connexion à Asterisk, enregistrement,
 /// appels entrants/sortants. L'interface ne fait qu'écouter ce service.
@@ -35,11 +38,93 @@ class SipService extends ChangeNotifier implements SipUaHelperListener {
   /// Canal utilisé pour prévenir l'appelant quand on refuse.
   ResponseMode responseMode = ResponseMode.sms;
 
-  /// Texte de la dernière décision prise (affiché pour la démo).
-  String? lastDecision;
+  /// Décisions prises, la plus récente en premier (écran Historique).
+  final List<DecisionLogEntry> history = [];
 
-  /// Permet à l'interface de demander un rafraîchissement.
-  void refresh() => notifyListeners();
+  DecisionLogEntry? get lastEntry => history.isEmpty ? null : history.first;
+
+
+  /// Noms des règles désactivées dans l'onglet Réglages.
+  final Set<String> _disabledRules = {};
+
+  bool isRuleEnabled(CallRule rule) => !_disabledRules.contains(rule.name);
+
+  void setRuleEnabled(CallRule rule, bool enabled) {
+    if (!rule.canBeDisabled) return;
+    enabled ? _disabledRules.remove(rule.name) : _disabledRules.add(rule.name);
+    engine.rules = defaultRules.where(isRuleEnabled).toList();
+    notifyListeners();
+  }
+
+  // Calendrier --------------------------------------------------------------
+
+  /// Rendez-vous en cours, ou null si disponible.
+  Appointment? get currentAppointment =>
+      calendar.appointmentAt(DateTime.now());
+
+  bool get inMeeting => currentAppointment != null;
+
+  void addAppointment(Appointment appointment) {
+    calendar.add(appointment);
+    notifyListeners();
+  }
+
+  void removeAppointment(Appointment appointment) {
+    calendar.remove(appointment);
+    notifyListeners();
+  }
+
+  /// Raccourci : "je suis en réunion à partir de maintenant".
+  void startMeeting(Duration duration) {
+    calendar.startMeeting(duration);
+    notifyListeners();
+  }
+
+  void endMeeting() {
+    calendar.endCurrentMeeting();
+    notifyListeners();
+  }
+
+  // Contacts ----------------------------------------------------------------
+
+  void addContact(String number, String name) {
+    contacts.byNumber[number.trim()] = name.trim();
+    notifyListeners();
+  }
+
+  void removeContact(String number) {
+    contacts.byNumber.remove(number);
+    notifyListeners();
+  }
+
+  /// Nom du contact pour ce numéro, ou null (lecture directe, sans attente).
+  String? contactNameFor(String number) {
+    for (final e in contacts.byNumber.entries) {
+      if (samePhone(e.key, number)) return e.value;
+    }
+    return null;
+  }
+
+  // Historique --------------------------------------------------------------
+
+  void clearHistory() {
+    history.clear();
+    notifyListeners();
+  }
+
+  DecisionLogEntry _log(String number, CallDecision decision, CallRule rule) {
+    final entry = DecisionLogEntry(
+      time: DateTime.now(),
+      callerNumber: number,
+      decision: decision,
+      ruleName: rule.name,
+    );
+    history.insert(0, entry);
+    debugPrint('DÉCISION (${rule.name}) : $number -> '
+        '${decisionSummary(decision)}');
+    notifyListeners();
+    return entry;
+  }
 
   // ---------------------------------------------------------------------------
 
@@ -127,7 +212,7 @@ class SipService extends ChangeNotifier implements SipUaHelperListener {
   /// la décision : laisser sonner, ou refuser automatiquement.
   Future<void> _applyDecision(Call call) async {
     final number = call.remote_identity ?? '';
-    final decision = await engine.decide(number, responseMode);
+    final result = await engine.decideWithRule(number, responseMode);
 
     // L'appelant a pu raccrocher pendant l'analyse.
     if (call.state == CallStateEnum.ENDED ||
@@ -135,23 +220,13 @@ class SipService extends ChangeNotifier implements SipUaHelperListener {
       return;
     }
 
-    switch (decision) {
-      case LetRing(:final contactName):
-        lastDecision =
-            '$contactName ($number) : contact connu et disponible -> sonnerie';
+    _log(number, result.decision, result.rule);
 
-      case RejectUnknown():
-        lastDecision = '$number : numéro inconnu -> refusé automatiquement (603)';
-        call.hangup(<String, dynamic>{'status_code': 603}); // Decline
-
-      case RejectBusy(:final contactName, :final appointment):
-        lastDecision = '$contactName ($number) : en rendez-vous jusqu\'à '
-            '${formatHour(appointment.end)} -> refusé automatiquement (486)';
-        call.hangup(<String, dynamic>{'status_code': 486}); // Busy Here
+    // Refus : code SIP visible côté appelant (603 Decline, 486 Busy Here).
+    final code = sipRejectCode(result.decision);
+    if (code != null) {
+      call.hangup(<String, dynamic>{'status_code': code});
     }
-
-    debugPrint('DÉCISION : $lastDecision');
-    notifyListeners();
   }
 
   // --- SipUaHelperListener ---------------------------------------------------
@@ -159,7 +234,11 @@ class SipService extends ChangeNotifier implements SipUaHelperListener {
   @override
   void transportStateChanged(TransportState state) {
     transportState = state.state;
-    if (state.cause != null) lastError = state.cause.toString();
+    if (state.state == TransportStateEnum.CONNECTED) {
+      lastError = null; // reconnecté : l'ancienne erreur n'est plus valable
+    } else if (state.cause != null) {
+      lastError = state.cause.toString();
+    }
     notifyListeners();
   }
 

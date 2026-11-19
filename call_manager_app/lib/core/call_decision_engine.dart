@@ -1,9 +1,9 @@
-// Moteur de règles
-//   1. Numéro absent des contacts = refus + "laissez-moi un SMS"
-//   2. Contact connu, en rendez-vous = refus + "en rdv jusqu'à HHhMM"
-//   3. Contact connu, disponible = on laisse sonner
+// Moteur de décision : rassemble les informations sur l'appel (contacts,
+// calendrier, heure), puis applique la liste de règles de call_rules.dart.
+// La première règle qui s'applique décide.
 
 import 'call_decision.dart';
+import 'call_rules.dart';
 
 /// Source des contacts (vrais contacts du téléphone, ou faux en test/démo).
 abstract class ContactsRepository {
@@ -21,28 +21,45 @@ class CallDecisionEngine {
   CallDecisionEngine({
     required this.contacts,
     required this.calendar,
+    this.rules = defaultRules,
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now;
 
   final ContactsRepository contacts;
   final CalendarRepository calendar;
+
+  /// Règles appliquées dans l'ordre (la première qui décide gagne).
+  /// Modifiable : l'écran Scénarios active ou désactive des règles.
+  List<CallRule> rules;
+
   final DateTime Function() _clock;
 
-  Future<CallDecision> decide(String callerNumber, ResponseMode mode) async {
-    // Scénario 1 : présence dans les contacts
-    final name = await contacts.findNameByNumber(callerNumber);
-    if (name == null) {
-      return RejectUnknown(callerNumber, mode, Messages.unknownCaller());
-    }
+  /// Rassemble les informations nécessaires aux règles.
+  Future<CallContext> buildContext(
+      String callerNumber, ResponseMode mode) async {
+    final now = _clock();
+    return CallContext(
+      callerNumber: callerNumber,
+      now: now,
+      mode: mode,
+      contactName: await contacts.findNameByNumber(callerNumber),
+      appointment: await calendar.currentAppointment(now),
+    );
+  }
 
-    // Scénario 2 : disponibilité dans le calendrier
-    final rdv = await calendar.currentAppointment(_clock());
-    if (rdv != null) {
-      return RejectBusy(
-          callerNumber, name, rdv, mode, Messages.busy(name, rdv.end));
-    }
+  Future<CallDecision> decide(String callerNumber, ResponseMode mode) async =>
+      (await decideWithRule(callerNumber, mode)).decision;
 
-    // Scénario 3 : connu et disponible
-    return LetRing(callerNumber, name);
+  /// Comme [decide], mais indique aussi quelle règle a décidé.
+  Future<({CallDecision decision, CallRule rule})> decideWithRule(
+      String callerNumber, ResponseMode mode) async {
+    final call = await buildContext(callerNumber, mode);
+    for (final rule in rules) {
+      final decision = rule.evaluate(call);
+      if (decision != null) return (decision: decision, rule: rule);
+    }
+    // Filet de sécurité si la liste ne finit pas par DefaultRingRule.
+    const fallback = DefaultRingRule();
+    return (decision: fallback.evaluate(call)!, rule: fallback);
   }
 }
