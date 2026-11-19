@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../sip/sip_service.dart';
+import 'messages_page.dart';
 
 /// Onglet Contacts : les numéros connus, les favoris et la liste noire.
 class ContactsPage extends StatelessWidget {
@@ -122,10 +123,15 @@ class _ContactTile extends StatelessWidget {
           PopupMenuButton<String>(
             tooltip: 'Plus',
             onSelected: (action) => switch (action) {
+              'message' => openConversation(context, sip, number),
               'block' => sip.setBlocked(number, !blocked),
               _ => sip.removeContact(number),
             },
             itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: 'message',
+                child: Text('Envoyer un message'),
+              ),
               PopupMenuItem(
                 value: 'block',
                 child: Text(blocked ? 'Débloquer' : 'Bloquer'),

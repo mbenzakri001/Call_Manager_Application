@@ -78,7 +78,7 @@ class DecisionTile extends StatelessWidget {
                   if (message != null) ...[
                     const SizedBox(height: 8),
                     Text(
-                      '« $message »',
+                      'SMS envoyé : « $message »',
                       style: theme.textTheme.bodySmall?.copyWith(
                         fontStyle: FontStyle.italic,
                       ),

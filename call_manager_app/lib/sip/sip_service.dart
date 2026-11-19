@@ -6,6 +6,7 @@ import '../config/sip_config.dart';
 import '../core/call_decision.dart';
 import '../core/call_decision_engine.dart';
 import '../core/call_rules.dart';
+import '../core/chat.dart';
 import '../core/decision_log.dart';
 import '../core/demo_repositories.dart';
 import '../core/phone_utils.dart';
@@ -157,6 +158,65 @@ class SipService extends ChangeNotifier
 
   // Historique --------------------------------------------------------------
 
+  // Messages (SIP MESSAGE) ---------------------------------------------------
+
+  /// Conversations par numéro, messages du plus ancien au plus récent.
+  final Map<String, List<ChatMessage>> conversations = {};
+  final Map<String, int> _unread = {};
+
+  int get unreadMessages => _unread.values.fold(0, (a, b) => a + b);
+  int unreadFor(String peer) => _unread[peer] ?? 0;
+
+  void markRead(String peer) {
+    if (_unread.remove(peer) != null) notifyListeners();
+  }
+
+  /// Conversations triées : la plus récente en premier.
+  List<String> get conversationPeers => conversations.keys.toList()
+    ..sort((a, b) =>
+        conversations[b]!.last.time.compareTo(conversations[a]!.last.time));
+
+  void _addMessage(ChatMessage m) {
+    conversations.putIfAbsent(m.peer, () => []).add(m);
+    if (m.incoming) _unread[m.peer] = unreadFor(m.peer) + 1;
+    notifyListeners();
+  }
+
+  /// Envoie un SIP MESSAGE ; Asterisk le relaie au compte [peer].
+  void sendText(String peer, String text, {bool automatic = false}) {
+    final to = peer.trim();
+    final body = text.trim();
+    if (to.isEmpty || body.isEmpty) return;
+
+    final message = ChatMessage(
+      peer: to,
+      text: body,
+      time: DateTime.now(),
+      incoming: false,
+      status: MessageStatus.sending,
+      automatic: automatic,
+    );
+    _addMessage(message);
+
+    if (!isRegistered) {
+      message.status = MessageStatus.failed;
+      notifyListeners();
+      return;
+    }
+    debugPrint('MESSAGE -> $to : $body');
+    final sending =
+        _helper.sendMessage('sip:$to@${SipConfig.serverIp}', body);
+    sending.on(EventSucceeded(), (EventSucceeded _) {
+      message.status = MessageStatus.sent;
+      notifyListeners();
+    });
+    sending.on(EventCallFailed(), (EventCallFailed e) {
+      debugPrint('MESSAGE -> $to : échec ${e.cause}');
+      message.status = MessageStatus.failed;
+      notifyListeners();
+    });
+  }
+
   void clearHistory() {
     history.clear();
     notifyListeners();
@@ -285,6 +345,14 @@ class SipService extends ChangeNotifier
     if (code != null) {
       call.hangup(<String, dynamic>{'status_code': code});
     }
+
+    // SMS automatique à l'appelant refusé (idée d'Halima) : le message prévu
+    // par la décision ("en rendez-vous jusqu'à 15h30"…). Rien pour un numéro
+    // bloqué.
+    final sms = callerMessage(result.decision);
+    if (code != null && sms != null) {
+      sendText(number, sms, automatic: true);
+    }
   }
 
   // --- SipUaHelperListener ---------------------------------------------------
@@ -355,7 +423,26 @@ class SipService extends ChangeNotifier
   }
 
   @override
-  void onNewMessage(SIPMessageRequest msg) {}
+  void onNewMessage(SIPMessageRequest msg) {
+    final dynamic request = msg.request;
+    final peer = msg.message?.remote_identity?.uri?.user ?? '';
+    final String? contentType = request?.getHeader('content-type')?.toString();
+    final String? body = request?.body as String?;
+    final text = extractMessageText(contentType, body);
+
+    debugPrint('MESSAGE <- $peer ($contentType) : $body');
+    if (peer.isEmpty || text == null || text.isEmpty) return;
+    // Un numéro en liste noire ne peut pas non plus écrire.
+    if (isBlocked(peer)) return;
+
+    _addMessage(ChatMessage(
+      peer: peer,
+      text: text,
+      time: DateTime.now(),
+      incoming: true,
+      status: MessageStatus.received,
+    ));
+  }
 
   @override
   void onNewNotify(Notify ntf) {}

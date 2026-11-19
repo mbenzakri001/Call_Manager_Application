@@ -5,6 +5,7 @@ import 'ui/calendar_page.dart';
 import 'ui/call_view.dart';
 import 'ui/contacts_page.dart';
 import 'ui/history_page.dart';
+import 'ui/messages_page.dart';
 import 'ui/phone_page.dart';
 import 'ui/settings_page.dart';
 
@@ -35,11 +36,12 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final SipService _sip = SipService();
-  static const _historyTab = 3;
+  static const _historyTab = 4;
   static const _titles = [
     'Téléphone',
     'Contacts',
     'Calendrier',
+    'Messages',
     'Historique',
     'Réglages',
   ];
@@ -52,7 +54,20 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     // L'autorisation micro est demandée par flutter_webrtc au premier
     // décroché ou au premier appel sortant.
+    _sip.addListener(_closeScreensOnIncomingCall);
     _sip.start();
+  }
+
+  bool _wasInCall = false;
+
+  /// Un appel arrive pendant qu'une conversation est ouverte : on revient à
+  /// l'écran principal, qui affiche l'écran d'appel.
+  void _closeScreensOnIncomingCall() {
+    final inCall = _sip.currentCall != null;
+    if (inCall && !_wasInCall && mounted) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
+    _wasInCall = inCall;
   }
 
   @override
@@ -104,6 +119,7 @@ class _HomePageState extends State<HomePage> {
                     PhonePage(sip: _sip),
                     ContactsPage(sip: _sip),
                     CalendarPage(sip: _sip),
+                    MessagesPage(sip: _sip),
                     HistoryPage(sip: _sip),
                     SettingsPage(sip: _sip),
                   ],
@@ -112,6 +128,9 @@ class _HomePageState extends State<HomePage> {
               ? null
               : NavigationBar(
                   selectedIndex: _tab,
+                  // 6 onglets : libellé seulement sous l'onglet actif.
+                  labelBehavior:
+                      NavigationDestinationLabelBehavior.onlyShowSelected,
                   onDestinationSelected: (i) => setState(() => _tab = i),
                   destinations: [
                     const NavigationDestination(
@@ -128,6 +147,15 @@ class _HomePageState extends State<HomePage> {
                       icon: Icon(Icons.calendar_month_outlined),
                       selectedIcon: Icon(Icons.calendar_month),
                       label: 'Calendrier',
+                    ),
+                    NavigationDestination(
+                      icon: Badge(
+                        isLabelVisible: _sip.unreadMessages > 0,
+                        label: Text('${_sip.unreadMessages}'),
+                        child: const Icon(Icons.chat_bubble_outline),
+                      ),
+                      selectedIcon: const Icon(Icons.chat_bubble),
+                      label: 'Messages',
                     ),
                     NavigationDestination(
                       icon: Badge(
