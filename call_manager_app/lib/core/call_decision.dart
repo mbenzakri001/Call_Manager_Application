@@ -66,13 +66,14 @@ class Messages {
     final firstName = contactName.trim().split(RegExp(r'\s+')).first;
     final hello = firstName.isEmpty ? 'Bonjour' : 'Bonjour $firstName';
     return "$hello, je suis en rendez-vous jusqu'à ${formatHour(until)}. "
-        "Je vous rappelle dès que possible.";
+        "Laissez-moi un message vocal, je vous rappelle dès que possible.";
   }
 
   static String doNotDisturb(String? contactName) {
     final firstName = (contactName ?? '').trim().split(RegExp(r'\s+')).first;
     final hello = firstName.isEmpty ? 'Bonjour' : 'Bonjour $firstName';
     return "$hello, je ne suis pas disponible pour le moment. "
-        "Si c'est urgent, rappelez dans les 30 secondes.";
+        "Laissez-moi un message vocal, ou rappelez dans les 30 secondes "
+        "si c'est urgent.";
   }
 }

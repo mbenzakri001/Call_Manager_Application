@@ -133,9 +133,14 @@ class _HomePageState extends State<HomePage> {
                       NavigationDestinationLabelBehavior.onlyShowSelected,
                   onDestinationSelected: (i) => setState(() => _tab = i),
                   destinations: [
-                    const NavigationDestination(
-                      icon: Icon(Icons.phone_outlined),
-                      selectedIcon: Icon(Icons.phone),
+                    NavigationDestination(
+                      // Badge : messages vocaux non écoutés.
+                      icon: Badge(
+                        isLabelVisible: _sip.voicemail.newMessages > 0,
+                        label: Text('${_sip.voicemail.newMessages}'),
+                        child: const Icon(Icons.phone_outlined),
+                      ),
+                      selectedIcon: const Icon(Icons.phone),
                       label: 'Téléphone',
                     ),
                     const NavigationDestination(

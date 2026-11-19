@@ -10,6 +10,7 @@ import '../core/chat.dart';
 import '../core/decision_log.dart';
 import '../core/demo_repositories.dart';
 import '../core/phone_utils.dart';
+import '../core/voicemail.dart';
 
 /// Seul point de contact avec sip_ua : connexion à Asterisk, enregistrement,
 /// appels entrants/sortants. L'interface ne fait qu'écouter ce service.
@@ -320,6 +321,14 @@ class SipService extends ChangeNotifier
     );
   }
 
+  /// Envoie une touche du clavier pendant l'appel (tonalité DTMF), par
+  /// exemple pour naviguer dans la messagerie vocale.
+  void sendDtmf(String tone) {
+    final call = currentCall;
+    if (call == null || isRinging) return;
+    call.sendDTMF(tone);
+  }
+
   void toggleSpeaker() {
     speakerOn = !speakerOn;
     Helper.setSpeakerphoneOn(speakerOn);
@@ -365,6 +374,10 @@ class SipService extends ChangeNotifier
     } else if (state.cause != null) {
       lastError = state.cause.toString();
     }
+    // Connexion perdue : l'abonnement à la messagerie est à refaire.
+    if (state.state == TransportStateEnum.DISCONNECTED) {
+      _voicemailSubscribed = false;
+    }
     notifyListeners();
   }
 
@@ -374,8 +387,25 @@ class SipService extends ChangeNotifier
     lastError = registrationState == RegistrationStateEnum.REGISTRATION_FAILED
         ? state.cause.toString()
         : null;
+    if (isRegistered && !_voicemailSubscribed) _subscribeVoicemail();
     notifyListeners();
   }
+
+  // Messagerie vocale ---------------------------------------------------------
+
+  /// Messages vocaux en attente sur la boîte du compte (via MWI).
+  VoicemailCount voicemail = const VoicemailCount(0, 0);
+  bool _voicemailSubscribed = false;
+
+  /// Demande à Asterisk de prévenir l'app des nouveaux messages vocaux.
+  void _subscribeVoicemail() {
+    _voicemailSubscribed = true;
+    _helper.subscribe(SipConfig.sipUri, 'message-summary',
+        'application/simple-message-summary');
+  }
+
+  /// Appelle la messagerie pour écouter ses messages.
+  Future<void> callVoicemail() => call(voicemailNumber);
 
   @override
   void callStateChanged(Call call, CallState state) {
@@ -445,7 +475,13 @@ class SipService extends ChangeNotifier
   }
 
   @override
-  void onNewNotify(Notify ntf) {}
+  void onNewNotify(Notify ntf) {
+    final count = parseMessageSummary(ntf.request?.body);
+    debugPrint('MWI : ${ntf.request?.body}');
+    if (count == null) return;
+    voicemail = count;
+    notifyListeners();
+  }
 
   @override
   void onNewReinvite(ReInvite event) {}

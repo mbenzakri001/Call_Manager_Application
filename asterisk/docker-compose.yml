@@ -12,11 +12,19 @@ services:
       - ./config/extensions.conf:/etc/asterisk/extensions.conf
       - ./config/rtp.conf:/etc/asterisk/rtp.conf
       - ./config/http.conf:/etc/asterisk/http.conf
+      - ./config/voicemail.conf:/etc/asterisk/voicemail.conf
+      # Annonces vocales (téléchargées par get-sounds.sh, hors Git)
+      - ./sounds:/var/lib/asterisk/sounds
+      # Messages vocaux enregistrés : conservés si le conteneur est recréé
+      - voicemail:/var/spool/asterisk/voicemail
     networks:
       voip:
         # IP fixe : référencée dans rtp.conf ([ice_host_candidates])
         ipv4_address: 172.30.0.10
     restart: unless-stopped
+
+volumes:
+  voicemail:
 
 networks:
   voip:

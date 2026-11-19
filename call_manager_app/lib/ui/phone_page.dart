@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:sip_ua/sip_ua.dart';
 
 import '../config/sip_config.dart';
+import '../core/voicemail.dart';
 import '../sip/sip_service.dart';
 
 /// Onglet Téléphone : clavier numérique pour passer un appel.
@@ -62,9 +63,12 @@ class _PhonePageState extends State<PhonePage> {
                     SizedBox(
                       height: 24,
                       child: contactName == null
-                          ? (_number == '600'
-                                ? const Text("Test d'écho")
-                                : null)
+                          ? switch (_number) {
+                              '600' => const Text("Test d'écho"),
+                              voicemailNumber =>
+                                const Text('Messagerie vocale'),
+                              _ => null,
+                            }
                           : Text(
                               contactName,
                               style: theme.textTheme.titleMedium,
@@ -88,7 +92,19 @@ class _PhonePageState extends State<PhonePage> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const SizedBox(width: 88),
+                        SizedBox(
+                          width: 88,
+                          child: IconButton(
+                            tooltip: 'Messagerie vocale',
+                            onPressed:
+                                sip.isRegistered ? sip.callVoicemail : null,
+                            icon: Badge(
+                              isLabelVisible: sip.voicemail.newMessages > 0,
+                              label: Text('${sip.voicemail.newMessages}'),
+                              child: const Icon(Icons.voicemail, size: 32),
+                            ),
+                          ),
+                        ),
                         FilledButton(
                           onPressed: sip.isRegistered && _number.isNotEmpty
                               ? _call
