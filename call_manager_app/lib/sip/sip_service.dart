@@ -124,7 +124,7 @@ class SipService extends ChangeNotifier implements SipUaHelperListener {
   }
 
   /// Interroge le moteur de décision pour un appel entrant, puis applique
-  /// la décision : laisser sonner, ou refuser automatiquement.
+  /// la décision : laisser sonner, ou refuser automatiquement + SMS.
   Future<void> _applyDecision(Call call) async {
     final number = call.remote_identity ?? '';
     final decision = await engine.decide(number, responseMode);
@@ -140,18 +140,29 @@ class SipService extends ChangeNotifier implements SipUaHelperListener {
         lastDecision =
             '$contactName ($number) : contact connu et disponible -> sonnerie';
 
-      case RejectUnknown():
-        lastDecision = '$number : numéro inconnu -> refusé automatiquement (603)';
+      case RejectUnknown(:final message):
+        lastDecision =
+            '$number : numéro inconnu -> refusé (603) + SMS envoyé';
         call.hangup(<String, dynamic>{'status_code': 603}); // Decline
+        _sendSms(number, message);
 
-      case RejectBusy(:final contactName, :final appointment):
+      case RejectBusy(:final contactName, :final appointment, :final message):
         lastDecision = '$contactName ($number) : en rendez-vous jusqu\'à '
-            '${formatHour(appointment.end)} -> refusé automatiquement (486)';
+            '${formatHour(appointment.end)} -> refusé (486) + SMS envoyé';
         call.hangup(<String, dynamic>{'status_code': 486}); // Busy Here
+        _sendSms(number, message);
     }
 
     debugPrint('DÉCISION : $lastDecision');
     notifyListeners();
+  }
+
+  /// Envoie un "SMS" (SIP MESSAGE) à l'appelant. Asterisk le reçoit dans
+  /// le contexte [messages] (extensions.conf) et le transmet au destinataire.
+  void _sendSms(String number, String text) {
+    final target = 'sip:$number@${SipConfig.serverIp}';
+    debugPrint('SMS -> $target : $text');
+    _helper.sendMessage(target, text);
   }
 
   // --- SipUaHelperListener ---------------------------------------------------
