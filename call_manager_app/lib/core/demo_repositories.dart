@@ -8,9 +8,7 @@ import 'phone_utils.dart';
 
 /// Carnet de contacts : 1001 est connu, 1002 ne l'est pas.
 class DemoContacts implements ContactsRepository {
-  final Map<String, String> byNumber = {
-    '1001': 'Client A',
-  };
+  final Map<String, String> byNumber = {'1001': 'Client A'};
 
   @override
   Future<String?> findNameByNumber(String number) async {
@@ -53,11 +51,32 @@ class DemoCalendar implements CalendarRepository {
     final current = appointmentAt(now);
     if (current == null) return;
     final i = appointments.indexOf(current);
-    appointments[i] =
-        Appointment(title: current.title, start: current.start, end: now);
+    appointments[i] = Appointment(
+      title: current.title,
+      start: current.start,
+      end: now,
+    );
   }
 
   @override
   Future<Appointment?> currentAppointment(DateTime at) async =>
       appointmentAt(at);
+}
+
+/// Liste noire et favoris de l'app.
+class DemoCallerLists implements CallerListsRepository {
+  final Set<String> blocked = {};
+  final Set<String> favorites = {};
+
+  static bool _contains(Set<String> set, String number) =>
+      set.any((n) => samePhone(n, number));
+
+  bool blockedSync(String number) => _contains(blocked, number);
+  bool favoriteSync(String number) => _contains(favorites, number);
+
+  @override
+  Future<bool> isBlocked(String number) async => blockedSync(number);
+
+  @override
+  Future<bool> isFavorite(String number) async => favoriteSync(number);
 }

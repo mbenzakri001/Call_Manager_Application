@@ -4,7 +4,7 @@ import '../core/call_decision.dart';
 import '../sip/sip_service.dart';
 
 /// Onglet Calendrier : disponibilité actuelle et rendez-vous à venir.
-/// Pendant un rendez-vous, le call manager refuse les appels des contacts.
+/// Pendant un rendez-vous, le call manager refuse les appels (sauf favoris).
 class CalendarPage extends StatelessWidget {
   const CalendarPage({super.key, required this.sip});
   final SipService sip;
@@ -105,9 +105,10 @@ class _AvailabilityCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(busy
-                ? 'Les appels de vos contacts sont refusés (486) avec un '
+                ? 'Les appels sont refusés (486), sauf favoris et appels '
+                    'répétés, avec un '
                     'message indiquant votre heure de fin.'
-                : 'Les appels de vos contacts sonnent normalement.'),
+                : 'Les appels sonnent normalement.'),
             const SizedBox(height: 12),
             if (busy)
               OutlinedButton.icon(

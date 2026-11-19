@@ -74,6 +74,17 @@ class _HomePageState extends State<HomePage> {
           appBar: AppBar(
             title: Text(inCall ? 'Call Manager' : _titles[_tab]),
             actions: [
+              if (_sip.doNotDisturbOn)
+                const Padding(
+                  padding: EdgeInsets.only(right: 12),
+                  child: Tooltip(
+                    message: 'Ne pas déranger activé',
+                    child: Icon(
+                      Icons.do_not_disturb_on,
+                      color: Colors.deepPurple,
+                    ),
+                  ),
+                ),
               Padding(
                 padding: const EdgeInsets.only(right: 16),
                 child: Icon(
@@ -104,28 +115,33 @@ class _HomePageState extends State<HomePage> {
                   onDestinationSelected: (i) => setState(() => _tab = i),
                   destinations: [
                     const NavigationDestination(
-                        icon: Icon(Icons.phone_outlined),
-                        selectedIcon: Icon(Icons.phone),
-                        label: 'Téléphone'),
+                      icon: Icon(Icons.phone_outlined),
+                      selectedIcon: Icon(Icons.phone),
+                      label: 'Téléphone',
+                    ),
                     const NavigationDestination(
-                        icon: Icon(Icons.contacts_outlined),
-                        selectedIcon: Icon(Icons.contacts),
-                        label: 'Contacts'),
+                      icon: Icon(Icons.contacts_outlined),
+                      selectedIcon: Icon(Icons.contacts),
+                      label: 'Contacts',
+                    ),
                     const NavigationDestination(
-                        icon: Icon(Icons.calendar_month_outlined),
-                        selectedIcon: Icon(Icons.calendar_month),
-                        label: 'Calendrier'),
+                      icon: Icon(Icons.calendar_month_outlined),
+                      selectedIcon: Icon(Icons.calendar_month),
+                      label: 'Calendrier',
+                    ),
                     NavigationDestination(
-                        icon: Badge(
-                          isLabelVisible: unseen > 0,
-                          label: Text('$unseen'),
-                          child: const Icon(Icons.history),
-                        ),
-                        label: 'Historique'),
+                      icon: Badge(
+                        isLabelVisible: unseen > 0,
+                        label: Text('$unseen'),
+                        child: const Icon(Icons.history),
+                      ),
+                      label: 'Historique',
+                    ),
                     const NavigationDestination(
-                        icon: Icon(Icons.settings_outlined),
-                        selectedIcon: Icon(Icons.settings),
-                        label: 'Réglages'),
+                      icon: Icon(Icons.settings_outlined),
+                      selectedIcon: Icon(Icons.settings),
+                      label: 'Réglages',
+                    ),
                   ],
                 ),
         );

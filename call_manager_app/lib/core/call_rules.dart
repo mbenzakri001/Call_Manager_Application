@@ -19,6 +19,10 @@ class CallContext {
     required this.mode,
     this.contactName,
     this.appointment,
+    this.isBlocked = false,
+    this.isFavorite = false,
+    this.doNotDisturb = false,
+    this.recentCallsFromCaller = 0,
   });
 
   /// Numéro de l'appelant tel que reçu (ex : "1001").
@@ -35,6 +39,19 @@ class CallContext {
 
   /// Canal utilisé pour prévenir l'appelant en cas de refus.
   final ResponseMode mode;
+
+  /// Le numéro est-il dans la liste noire ?
+  final bool isBlocked;
+
+  /// L'appelant est-il un contact favori ?
+  final bool isFavorite;
+
+  /// Le mode "Ne pas déranger" est-il activé ?
+  final bool doNotDisturb;
+
+  /// Nombre d'appels de ce numéro dans les dernières minutes
+  /// ([UrgentRepeatCallRule.window]), sans compter l'appel en cours.
+  final int recentCallsFromCaller;
 
   bool get isKnownContact => contactName != null;
   bool get isInMeeting => appointment != null;
@@ -57,22 +74,80 @@ abstract class CallRule {
   CallDecision? evaluate(CallContext call);
 }
 
-/// Numéro absent des contacts : refus + demande de SMS.
-class UnknownCallerRule extends CallRule {
-  const UnknownCallerRule();
+/// Numéro en liste noire : refus (603), toujours, même pour un contact.
+class BlockedCallerRule extends CallRule {
+  const BlockedCallerRule();
 
   @override
-  String get name => 'Numéro inconnu';
+  String get name => 'Liste noire';
+
+  @override
+  String get description => 'Numéro bloqué → refus (603), sans message';
+
+  @override
+  CallDecision? evaluate(CallContext call) => call.isBlocked
+      ? RejectBlocked(call.callerNumber, contactName: call.contactName)
+      : null;
+}
+
+/// Contact favori : sonne toujours, même en rendez-vous ou en
+/// "Ne pas déranger" (mais pas s'il est bloqué : la liste noire passe avant).
+class FavoriteRule extends CallRule {
+  const FavoriteRule();
+
+  @override
+  String get name => 'Favori';
 
   @override
   String get description =>
-      'Numéro absent des contacts → refus (603) + demande de SMS';
+      'Contact favori → sonnerie, même en rendez-vous ou en Ne pas déranger';
 
   @override
-  CallDecision? evaluate(CallContext call) {
-    if (call.isKnownContact) return null;
-    return RejectUnknown(call.callerNumber, call.mode, Messages.unknownCaller());
-  }
+  CallDecision? evaluate(CallContext call) => call.isFavorite
+      ? LetRing(call.callerNumber, call.contactName ?? call.callerNumber)
+      : null;
+}
+
+/// Un contact qui rappelle vite est sans doute urgent : on le laisse sonner.
+class UrgentRepeatCallRule extends CallRule {
+  const UrgentRepeatCallRule();
+
+  /// Délai dans lequel un deuxième appel est considéré comme urgent.
+  static const Duration window = Duration(seconds: 30);
+
+  @override
+  String get name => 'Appel répété';
+
+  @override
+  String get description =>
+      'Un contact rappelle dans les 30 s → sonnerie (urgence), '
+      'même en rendez-vous ou en Ne pas déranger';
+
+  @override
+  CallDecision? evaluate(CallContext call) =>
+      call.isKnownContact && call.recentCallsFromCaller > 0
+      ? LetRing(call.callerNumber, call.contactName!)
+      : null;
+}
+
+/// Mode "Ne pas déranger" : refus (480) avec un message.
+class DoNotDisturbRule extends CallRule {
+  const DoNotDisturbRule();
+
+  @override
+  String get name => 'Ne pas déranger';
+
+  @override
+  String get description => 'Ne pas déranger activé → refus (480) + message';
+
+  @override
+  CallDecision? evaluate(CallContext call) => call.doNotDisturb
+      ? RejectDoNotDisturb(
+          call.callerNumber,
+          Messages.doNotDisturb(call.contactName),
+          contactName: call.contactName,
+        )
+      : null;
 }
 
 /// Contact connu mais en rendez-vous : refus avec l'heure de fin.
@@ -92,7 +167,12 @@ class BusyInMeetingRule extends CallRule {
     if (rdv == null) return null;
     final name = call.contactName ?? call.callerNumber;
     return RejectBusy(
-        call.callerNumber, name, rdv, call.mode, Messages.busy(name, rdv.end));
+      call.callerNumber,
+      name,
+      rdv,
+      call.mode,
+      Messages.busy(name, rdv.end),
+    );
   }
 }
 
@@ -115,8 +195,13 @@ class DefaultRingRule extends CallRule {
 }
 
 /// Règles utilisées par l'app, par ordre de priorité.
+/// Les exceptions (favori, appel répété) passent avant les règles qu'elles
+/// contournent (Ne pas déranger, rendez-vous).
 const List<CallRule> defaultRules = [
-  UnknownCallerRule(),
+  BlockedCallerRule(),
+  FavoriteRule(),
+  UrgentRepeatCallRule(),
+  DoNotDisturbRule(),
   BusyInMeetingRule(),
   DefaultRingRule(),
 ];

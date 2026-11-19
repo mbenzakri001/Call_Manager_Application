@@ -48,10 +48,9 @@ void main() {
         clock: () => now,
       );
 
-  test('Scénario 1 : numéro inconnu -> refus avec demande de SMS', () async {
+  test('Numéro inconnu et disponible -> sonnerie', () async {
     final d = await engine(null).decide('1002', ResponseMode.sms);
-    expect(d, isA<RejectUnknown>());
-    expect((d as RejectUnknown).message, contains('SMS'));
+    expect(d, isA<LetRing>());
   });
 
   test('Scénario 2 : contact en rendez-vous -> refus avec heure de fin', () async {

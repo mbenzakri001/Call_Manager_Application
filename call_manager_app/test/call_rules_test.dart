@@ -34,12 +34,6 @@ void main() {
       );
 
   group('Chaque règle, testée seule', () {
-    test('UnknownCallerRule : ne décide que pour un inconnu', () {
-      const rule = UnknownCallerRule();
-      expect(rule.evaluate(ctx()), isA<RejectUnknown>());
-      expect(rule.evaluate(ctx(name: 'Client A')), isNull);
-    });
-
     test('BusyInMeetingRule : ne décide que pendant un rendez-vous', () {
       const rule = BusyInMeetingRule();
       expect(rule.evaluate(ctx(name: 'Client A', appointment: rdv)),
@@ -63,17 +57,17 @@ void main() {
         );
 
     test('La première règle qui s\'applique gagne', () async {
-      // Inconnu ET rendez-vous en cours : l'ordre choisit la raison du refus.
-      final unknownFirst = await engine(defaultRules)
+      // Rendez-vous en cours : refus, sauf si une règle placée avant
+      // laisse sonner (ici la règle par défaut mise en tête).
+      final meetingFirst = await engine(defaultRules)
           .decide('1002', ResponseMode.sms);
-      expect(unknownFirst, isA<RejectUnknown>());
-
-      final meetingFirst = await engine(const [
-        BusyInMeetingRule(),
-        UnknownCallerRule(),
-        DefaultRingRule(),
-      ]).decide('1002', ResponseMode.sms);
       expect(meetingFirst, isA<RejectBusy>());
+
+      final ringFirst = await engine(const [
+        DefaultRingRule(),
+        BusyInMeetingRule(),
+      ]).decide('1002', ResponseMode.sms);
+      expect(ringFirst, isA<LetRing>());
     });
 
     test('Sans règle applicable, on laisse sonner', () async {

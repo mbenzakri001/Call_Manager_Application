@@ -12,7 +12,11 @@ import '../core/phone_utils.dart';
 
 /// Seul point de contact avec sip_ua : connexion à Asterisk, enregistrement,
 /// appels entrants/sortants. L'interface ne fait qu'écouter ce service.
-class SipService extends ChangeNotifier implements SipUaHelperListener {
+class SipService extends ChangeNotifier
+    implements
+        SipUaHelperListener,
+        CallHistoryRepository,
+        UserSettingsRepository {
   final SIPUAHelper _helper = SIPUAHelper();
 
   TransportStateEnum transportState = TransportStateEnum.NONE;
@@ -31,9 +35,56 @@ class SipService extends ChangeNotifier implements SipUaHelperListener {
   /// Contacts et calendrier de démo (remplacés plus tard par les vrais).
   final DemoContacts contacts = DemoContacts();
   final DemoCalendar calendar = DemoCalendar();
+  final DemoCallerLists lists = DemoCallerLists();
 
-  late final CallDecisionEngine engine =
-      CallDecisionEngine(contacts: contacts, calendar: calendar);
+  late final CallDecisionEngine engine = CallDecisionEngine(
+    contacts: contacts,
+    calendar: calendar,
+    lists: lists,
+    history: this,
+    settings: this,
+  );
+
+  // Ne pas déranger -----------------------------------------------------------
+
+  bool _doNotDisturb = false;
+  bool get doNotDisturbOn => _doNotDisturb;
+
+  set doNotDisturbOn(bool on) {
+    _doNotDisturb = on;
+    notifyListeners();
+  }
+
+  @override
+  Future<bool> doNotDisturb() async => _doNotDisturb;
+
+  // Liste noire et favoris ----------------------------------------------------
+
+  bool isBlocked(String number) => lists.blockedSync(number);
+  bool isFavorite(String number) => lists.favoriteSync(number);
+
+  void setBlocked(String number, bool blocked) {
+    final n = number.trim();
+    if (n.isEmpty) return;
+    blocked
+        ? lists.blocked.add(n)
+        : lists.blocked.removeWhere((b) => samePhone(b, n));
+    notifyListeners();
+  }
+
+  void setFavorite(String number, bool favorite) {
+    favorite
+        ? lists.favorites.add(number)
+        : lists.favorites.removeWhere((f) => samePhone(f, number));
+    notifyListeners();
+  }
+
+  // Appels répétés ------------------------------------------------------------
+
+  @override
+  Future<int> countCallsFrom(String number, DateTime since) async => history
+      .where((e) => e.time.isAfter(since) && samePhone(e.callerNumber, number))
+      .length;
 
   /// Canal utilisé pour prévenir l'appelant quand on refuse.
   ResponseMode responseMode = ResponseMode.sms;
@@ -42,7 +93,6 @@ class SipService extends ChangeNotifier implements SipUaHelperListener {
   final List<DecisionLogEntry> history = [];
 
   DecisionLogEntry? get lastEntry => history.isEmpty ? null : history.first;
-
 
   /// Noms des règles désactivées dans l'onglet Réglages.
   final Set<String> _disabledRules = {};
@@ -59,8 +109,7 @@ class SipService extends ChangeNotifier implements SipUaHelperListener {
   // Calendrier --------------------------------------------------------------
 
   /// Rendez-vous en cours, ou null si disponible.
-  Appointment? get currentAppointment =>
-      calendar.appointmentAt(DateTime.now());
+  Appointment? get currentAppointment => calendar.appointmentAt(DateTime.now());
 
   bool get inMeeting => currentAppointment != null;
 
@@ -94,6 +143,7 @@ class SipService extends ChangeNotifier implements SipUaHelperListener {
 
   void removeContact(String number) {
     contacts.byNumber.remove(number);
+    lists.favorites.removeWhere((f) => samePhone(f, number));
     notifyListeners();
   }
 
@@ -120,8 +170,10 @@ class SipService extends ChangeNotifier implements SipUaHelperListener {
       ruleName: rule.name,
     );
     history.insert(0, entry);
-    debugPrint('DÉCISION (${rule.name}) : $number -> '
-        '${decisionSummary(decision)}');
+    debugPrint(
+      'DÉCISION (${rule.name}) : $number -> '
+      '${decisionSummary(decision)}',
+    );
     notifyListeners();
     return entry;
   }
@@ -162,8 +214,9 @@ class SipService extends ChangeNotifier implements SipUaHelperListener {
   }
 
   Future<MediaStream> _openMicrophone() async {
-    _localStream ??= await navigator.mediaDevices
-        .getUserMedia(<String, dynamic>{'audio': true, 'video': false});
+    _localStream ??= await navigator.mediaDevices.getUserMedia(
+      <String, dynamic>{'audio': true, 'video': false},
+    );
     return _localStream!;
   }
 
@@ -181,8 +234,11 @@ class SipService extends ChangeNotifier implements SipUaHelperListener {
   Future<void> call(String target) async {
     if (target.trim().isEmpty || currentCall != null) return;
     final stream = await _openMicrophone();
-    await _helper.call('sip:${target.trim()}@${SipConfig.serverIp}',
-        voiceOnly: true, mediaStream: stream);
+    await _helper.call(
+      'sip:${target.trim()}@${SipConfig.serverIp}',
+      voiceOnly: true,
+      mediaStream: stream,
+    );
   }
 
   Future<void> answer() async {
@@ -197,9 +253,11 @@ class SipService extends ChangeNotifier implements SipUaHelperListener {
   void hangup({int? statusCode}) {
     final call = currentCall;
     if (call == null) return;
-    call.hangup(statusCode == null
-        ? <String, dynamic>{}
-        : <String, dynamic>{'status_code': statusCode});
+    call.hangup(
+      statusCode == null
+          ? <String, dynamic>{}
+          : <String, dynamic>{'status_code': statusCode},
+    );
   }
 
   void toggleSpeaker() {

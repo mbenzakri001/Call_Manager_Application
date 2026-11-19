@@ -20,11 +20,9 @@ Future<SipService> pump(
 }
 
 void main() {
-  testWidgets('Contacts : ajouter 1002 -> il n\'est plus refusé',
-      (tester) async {
+  testWidgets('Contacts : ajouter puis supprimer 1002', (tester) async {
     final sip = await pump(tester, (s) => ContactsPage(sip: s));
-    expect(await sip.engine.decide('1002', sip.responseMode),
-        isA<RejectUnknown>());
+    expect(sip.contactNameFor('1002'), isNull);
 
     await tester.tap(find.text('Ajouter'));
     await tester.pumpAndSettle();
@@ -35,9 +33,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Client B'), findsOneWidget);
-    expect(await sip.engine.decide('1002', sip.responseMode), isA<LetRing>());
+    expect(sip.contactNameFor('1002'), 'Client B');
 
-    await tester.tap(find.byTooltip('Supprimer').last);
+    // Client B est le dernier de la liste : menu "Plus" -> Supprimer.
+    await tester.tap(find.byTooltip('Plus').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Supprimer'));
     await tester.pumpAndSettle();
     expect(find.text('Client B'), findsNothing);
   });
@@ -59,18 +60,54 @@ void main() {
     expect(await sip.engine.decide('1001', sip.responseMode), isA<LetRing>());
   });
 
-  testWidgets('Réglages : désactiver "Numéro inconnu" -> l\'inconnu sonne',
+  testWidgets('Réglages : désactiver "En rendez-vous" -> ça sonne',
       (tester) async {
     final sip = await pump(tester, (s) => SettingsPage(sip: s));
+    sip.startMeeting(const Duration(minutes: 30));
+    expect(await sip.engine.decide('1001', sip.responseMode),
+        isA<RejectBusy>());
 
     final ruleSwitch = find.descendant(
       of: find.ancestor(
-          of: find.text('Numéro inconnu'), matching: find.byType(ListTile)),
+          of: find.text('En rendez-vous'), matching: find.byType(ListTile)),
       matching: find.byType(Switch),
     );
+    await tester.scrollUntilVisible(ruleSwitch, 200);
     await tester.tap(ruleSwitch);
     await tester.pumpAndSettle();
 
-    expect(await sip.engine.decide('1002', sip.responseMode), isA<LetRing>());
+    expect(await sip.engine.decide('1001', sip.responseMode), isA<LetRing>());
+  });
+
+  testWidgets('Réglages : Ne pas déranger -> refus 480', (tester) async {
+    final sip = await pump(tester, (s) => SettingsPage(sip: s));
+    await tester.tap(find.text('Ne pas déranger').first);
+    await tester.pumpAndSettle();
+    expect(sip.doNotDisturbOn, isTrue);
+    expect(await sip.engine.decide('1001', sip.responseMode),
+        isA<RejectDoNotDisturb>());
+  });
+
+  testWidgets('Contacts : favori puis blocage', (tester) async {
+    final sip = await pump(tester, (s) => ContactsPage(sip: s));
+
+    // Étoile : 1001 devient favori, il sonne même en Ne pas déranger.
+    await tester.tap(find.byTooltip('Ajouter aux favoris'));
+    await tester.pumpAndSettle();
+    sip.doNotDisturbOn = true;
+    expect(await sip.engine.decide('1001', sip.responseMode), isA<LetRing>());
+
+    // Menu "Plus" -> Bloquer : la liste noire passe avant les favoris.
+    await tester.tap(find.byTooltip('Plus'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bloquer'));
+    await tester.pumpAndSettle();
+    expect(find.text('Débloquer'), findsOneWidget);
+    expect(await sip.engine.decide('1001', sip.responseMode),
+        isA<RejectBlocked>());
+
+    await tester.tap(find.text('Débloquer'));
+    await tester.pumpAndSettle();
+    expect(sip.isBlocked('1001'), isFalse);
   });
 }

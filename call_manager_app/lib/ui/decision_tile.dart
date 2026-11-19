@@ -7,16 +7,23 @@ import '../core/decision_log.dart';
 ({IconData icon, Color color}) decisionStyle(CallDecision decision) =>
     switch (decision) {
       LetRing() => (icon: Icons.ring_volume, color: Colors.green),
-      RejectUnknown() => (icon: Icons.person_off, color: Colors.red),
       RejectBusy() => (icon: Icons.event_busy, color: Colors.orange),
+      RejectBlocked() => (icon: Icons.block, color: Colors.red),
+      RejectDoNotDisturb() => (
+        icon: Icons.do_not_disturb_on,
+        color: Colors.deepPurple,
+      ),
     };
 
 /// Affiche une décision du moteur : qui appelait, ce qui a été décidé,
 /// par quelle règle, et le message prévu pour l'appelant.
 class DecisionTile extends StatelessWidget {
-  const DecisionTile({super.key, required this.entry});
+  const DecisionTile({super.key, required this.entry, this.action});
 
   final DecisionLogEntry entry;
+
+  /// Bouton facultatif à droite (ex : bloquer / débloquer l'appelant).
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
@@ -52,16 +59,19 @@ class DecisionTile extends StatelessWidget {
                           style: theme.textTheme.titleSmall,
                         ),
                       ),
-                      Text(formatHour(entry.time),
-                          style: theme.textTheme.bodySmall),
+                      Text(
+                        formatHour(entry.time),
+                        style: theme.textTheme.bodySmall,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 2),
                   Text(
                     decisionSummary(entry.decision) +
                         (code == null ? '' : ' · SIP $code'),
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(color: style.color),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: style.color,
+                    ),
                   ),
                   const SizedBox(height: 6),
                   _Tag('Règle : ${entry.ruleName}'),
@@ -69,13 +79,15 @@ class DecisionTile extends StatelessWidget {
                     const SizedBox(height: 8),
                     Text(
                       '« $message »',
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(fontStyle: FontStyle.italic),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
                   ],
                 ],
               ),
             ),
+            ?action,
           ],
         ),
       ),

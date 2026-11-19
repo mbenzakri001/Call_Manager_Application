@@ -24,13 +24,6 @@ class LetRing extends CallDecision {
   final String contactName;
 }
 
-/// Numéro absent des contacts : on refuse et on demande un SMS.
-class RejectUnknown extends CallDecision {
-  const RejectUnknown(super.callerNumber, this.mode, this.message);
-  final ResponseMode mode;
-  final String message;
-}
-
 /// Contact connu mais en rendez-vous : on refuse en indiquant l'heure de fin.
 class RejectBusy extends CallDecision {
   const RejectBusy(
@@ -46,21 +39,40 @@ class RejectBusy extends CallDecision {
   final String message;
 }
 
+/// Numéro en liste noire : refus sec, sans message.
+class RejectBlocked extends CallDecision {
+  const RejectBlocked(super.callerNumber, {this.contactName});
+  final String? contactName;
+}
+
+/// Mode "Ne pas déranger" activé : refus avec un message.
+class RejectDoNotDisturb extends CallDecision {
+  const RejectDoNotDisturb(
+    super.callerNumber,
+    this.message, {
+    this.contactName,
+  });
+  final String? contactName;
+  final String message;
+}
+
 /// Formate une heure en "14h30".
 String formatHour(DateTime t) =>
     '${t.hour}h${t.minute.toString().padLeft(2, '0')}';
 
 /// Textes envoyés à l'appelant.
 class Messages {
-  static String unknownCaller() =>
-      "Bonjour, je ne connais pas votre numéro et je ne prends donc pas "
-      "votre appel. Merci de me laisser un SMS en précisant qui vous êtes "
-      "et l'objet de votre appel.";
-
   static String busy(String contactName, DateTime until) {
     final firstName = contactName.trim().split(RegExp(r'\s+')).first;
     final hello = firstName.isEmpty ? 'Bonjour' : 'Bonjour $firstName';
     return "$hello, je suis en rendez-vous jusqu'à ${formatHour(until)}. "
         "Je vous rappelle dès que possible.";
+  }
+
+  static String doNotDisturb(String? contactName) {
+    final firstName = (contactName ?? '').trim().split(RegExp(r'\s+')).first;
+    final hello = firstName.isEmpty ? 'Bonjour' : 'Bonjour $firstName';
+    return "$hello, je ne suis pas disponible pour le moment. "
+        "Si c'est urgent, rappelez dans les 30 secondes.";
   }
 }

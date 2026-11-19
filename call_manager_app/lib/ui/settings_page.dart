@@ -17,11 +17,27 @@ class SettingsPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        Card(
+          child: SwitchListTile(
+            secondary: Icon(
+              Icons.do_not_disturb_on,
+              color: sip.doNotDisturbOn ? Colors.deepPurple : null,
+            ),
+            title: const Text('Ne pas déranger'),
+            subtitle: const Text(
+              'Refuse les appels (480), sauf favoris et appels répétés',
+            ),
+            value: sip.doNotDisturbOn,
+            onChanged: (on) => sip.doNotDisturbOn = on,
+          ),
+        ),
+        const SizedBox(height: 24),
         Text('Filtrage des appels', style: theme.textTheme.titleMedium),
         const SizedBox(height: 4),
         const Text(
-            "Les règles s'appliquent dans l'ordre : la première règle active "
-            "qui correspond à l'appel décide."),
+          "Les règles s'appliquent dans l'ordre : la première règle active "
+          "qui correspond à l'appel décide.",
+        ),
         const SizedBox(height: 8),
         Card(
           child: Column(
@@ -51,8 +67,7 @@ class SettingsPage extends StatelessWidget {
               ListTile(
                 leading: const Icon(Icons.badge),
                 title: const Text('Compte'),
-                subtitle:
-                    Text('${SipConfig.displayName} (${SipConfig.user})'),
+                subtitle: Text('${SipConfig.displayName} (${SipConfig.user})'),
               ),
             ],
           ),
@@ -84,7 +99,9 @@ class _RuleTile extends StatelessWidget {
       trailing: rule.canBeDisabled
           ? Switch(value: enabled, onChanged: onChanged)
           : const Tooltip(
-              message: 'Toujours active', child: Icon(Icons.lock_outline)),
+              message: 'Toujours active',
+              child: Icon(Icons.lock_outline),
+            ),
     );
   }
 }

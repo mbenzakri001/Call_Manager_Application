@@ -21,32 +21,36 @@ class DecisionLogEntry {
 
   /// Nom du contact, ou null si l'appelant est inconnu.
   String? get contactName => switch (decision) {
-        LetRing(:final contactName) =>
-          contactName == callerNumber ? null : contactName,
-        RejectBusy(:final contactName) =>
-          contactName == callerNumber ? null : contactName,
-        RejectUnknown() => null,
-      };
+    LetRing(:final contactName) =>
+      contactName == callerNumber ? null : contactName,
+    RejectBusy(:final contactName) =>
+      contactName == callerNumber ? null : contactName,
+    RejectBlocked(:final contactName) => contactName,
+    RejectDoNotDisturb(:final contactName) => contactName,
+  };
 }
 
 /// Code SIP envoyé à l'appelant pour un refus, ou null si on laisse sonner.
 int? sipRejectCode(CallDecision decision) => switch (decision) {
-      LetRing() => null,
-      RejectUnknown() => 603, // Decline
-      RejectBusy() => 486, // Busy Here
-    };
+  LetRing() => null,
+  RejectBusy() => 486, // Busy Here
+  RejectBlocked() => 603, // Decline
+  RejectDoNotDisturb() => 480, // Temporarily Unavailable
+};
 
-/// Résumé court de la décision ("Sonnerie", "Refusé : numéro inconnu"…).
+/// Résumé court de la décision ("Sonnerie", "Refusé : numéro bloqué"…).
 String decisionSummary(CallDecision decision) => switch (decision) {
-      LetRing() => 'Sonnerie',
-      RejectUnknown() => 'Refusé : numéro inconnu',
-      RejectBusy(:final appointment) =>
-        "Refusé : en rendez-vous jusqu'à ${formatHour(appointment.end)}",
-    };
+  LetRing() => 'Sonnerie',
+  RejectBusy(:final appointment) =>
+    "Refusé : en rendez-vous jusqu'à ${formatHour(appointment.end)}",
+  RejectBlocked() => 'Refusé : numéro bloqué',
+  RejectDoNotDisturb() => 'Refusé : ne pas déranger',
+};
 
 /// Message destiné à l'appelant, ou null si on laisse sonner.
 String? callerMessage(CallDecision decision) => switch (decision) {
-      LetRing() => null,
-      RejectUnknown(:final message) => message,
-      RejectBusy(:final message) => message,
-    };
+  LetRing() => null,
+  RejectBusy(:final message) => message,
+  RejectBlocked() => null,
+  RejectDoNotDisturb(:final message) => message,
+};
